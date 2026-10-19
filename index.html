@@ -560,12 +560,10 @@
             const icon = document.getElementById('fs-icon');
 
             if (!isFullScreen) {
-                window.location.href = "app://landscape";
                 playerContainer.classList.add('fullscreen-active');
                 icon.className = "fa-solid fa-compress";
                 isFullScreen = true;
             } else {
-                window.location.href = "app://portrait";
                 playerContainer.classList.remove('fullscreen-active');
                 icon.className = "fa-solid fa-expand";
                 isFullScreen = false;
