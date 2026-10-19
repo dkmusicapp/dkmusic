@@ -2,7 +2,7 @@
 <html lang="hi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>DK Music Clone</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -41,7 +41,6 @@
             font-size: 24px;
         }
         
-        /* Top Banner Slider */
         .banner-container {
             display: flex;
             gap: 12px;
@@ -178,7 +177,6 @@
             text-overflow: ellipsis;
         }
         
-        /* 3-Dot Menu Dropdown */
         .menu-btn {
             background: none;
             border: none;
@@ -214,14 +212,57 @@
             background: #383838;
         }
 
-        /* Normal Main Player */
         #player-container {
             padding: 0 20px;
             margin-top: 15px;
             width: 100%;
         }
+
+        /* फुलस्क्रीन मोड में वीडियो को पूरी स्क्रीन पर फैलाने के लिए */
+        .fullscreen-active {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            z-index: 999999 !important;
+            background: #000 !important;
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+        .fullscreen-active #video-wrapper {
+            width: 100vw !important;
+            height: 100vh !important;
+        }
+        .fullscreen-active iframe {
+            width: 100vw !important;
+            height: 100vh !important;
+            border-radius: 0 !important;
+        }
+
+        /* गोल आइकॉन वाला फुलस्क्रीन बटन */
+        .custom-fs-btn {
+            position: absolute;
+            bottom: 15px;
+            right: 15px;
+            background: rgba(0, 0, 0, 0.75);
+            color: #fff;
+            border: none;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            z-index: 100005;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.6);
+        }
+        .custom-fs-btn i {
+            color: #ffffff;
+            font-size: 16px;
+        }
         
-        /* Floating Mini Player (छोटा फ्लोटिंग बॉक्स) */
         .mini-player-active {
             position: fixed !important;
             bottom: 60px !important;
@@ -239,6 +280,10 @@
             height: 100px !important;
             border-radius: 8px;
         }
+        .mini-player-active .custom-fs-btn {
+            display: none !important;
+        }
+
         .close-mini-btn {
             display: none;
             position: absolute;
@@ -307,15 +352,14 @@
         </div>
     </div>
 
-    <!-- ऑटो-स्लाइड बैनर -->
     <div class="banner-container" id="bannerContainer"></div>
 
-    <div class="chips-container">
-        <div class="chip active">Podcasts</div>
-        <div class="chip">Romance</div>
-        <div class="chip">Feel good</div>
-        <div class="chip">Relax</div>
-        <div class="chip">Energise</div>
+    <div class="chips-container" id="chipsContainer">
+        <div class="chip active" onclick="filterCategory('Podcasts', this)">Podcasts</div>
+        <div class="chip" onclick="filterCategory('Romance', this)">Romance</div>
+        <div class="chip" onclick="filterCategory('Feel good songs', this)">Feel good</div>
+        <div class="chip" onclick="filterCategory('Relaxing music', this)">Relax</div>
+        <div class="chip" onclick="filterCategory('Energising songs', this)">Energise</div>
     </div>
 
     <div class="search-bar">
@@ -323,7 +367,6 @@
         <button onclick="handleSearch()">Search</button>
     </div>
 
-    <!-- प्लेयर कंटेनर (मिनी प्लेयर में बदलने वाला) -->
     <div id="player-container"></div>
 
     <div class="section-header">
@@ -352,18 +395,27 @@
     </div>
 
     <script>
-        // ⚠️ अपनी असली API Key यहाँ डालें
         const API_KEY = "AIzaSyBAZCyyRc8pwqiP_FFQRbDWABWkrP_5AXs";
         let isPlaying = false;
+        let isFullScreen = false;
 
         window.onload = () => {
             searchSongs();
             startAutoScroll();
         };
 
-        // नया गाना सर्च करने का हैंडलर
         function handleSearch() {
-            // अगर गाना चल रहा है तो सर्च करते ही वह मिनी प्लेयर में चला जाएगा
+            if (isPlaying) {
+                minimizePlayer();
+            }
+            searchSongs();
+        }
+
+        function filterCategory(categoryName, element) {
+            document.querySelectorAll('.chip').forEach(chip => chip.classList.remove('active'));
+            element.classList.add('active');
+
+            document.getElementById('searchInput').value = categoryName;
             if (isPlaying) {
                 minimizePlayer();
             }
@@ -477,41 +529,62 @@
             }
         }
 
-        // गाना बजाने का फ़ंक्शन (फुल साइज)
         function playSong(videoId) {
             isPlaying = true;
+            isFullScreen = false;
             const playerContainer = document.getElementById('player-container');
             
-            // मिनी प्लेयर स्टाइल हटाएं अगर पहले से था
-            playerContainer.classList.remove('mini-player-active');
+            playerContainer.classList.remove('mini-player-active', 'fullscreen-active');
 
             playerContainer.innerHTML = `
                 <div id="video-wrapper" style="position:relative;">
+                    <button class="custom-fs-btn" onclick="toggleCustomFullScreen()">
+                        <i class="fa-solid fa-expand" id="fs-icon"></i>
+                    </button>
                     <button class="close-mini-btn" onclick="closePlayer()">✕</button>
                     <iframe 
                         id="yt-video"
-                        src="https://www.youtube.com/embed/${videoId}?autoplay=1" 
-                        allow="autoplay; encrypted-media; fullscreen" 
-                        allowfullscreen>
+                        src="https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1" 
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" 
+                        allowfullscreen="true"
+                        webkitallowfullscreen="true"
+                        mozallowfullscreen="true">
                     </iframe>
                 </div>
             `;
             playerContainer.scrollIntoView({ behavior: 'smooth' });
         }
 
-        // प्लेयर को छोटे बॉक्स में भेजने का फ़ंक्शन
+        function toggleCustomFullScreen() {
+            const playerContainer = document.getElementById('player-container');
+            const icon = document.getElementById('fs-icon');
+
+            if (!isFullScreen) {
+                window.location.href = "app://landscape";
+                playerContainer.classList.add('fullscreen-active');
+                icon.className = "fa-solid fa-compress";
+                isFullScreen = true;
+            } else {
+                window.location.href = "app://portrait";
+                playerContainer.classList.remove('fullscreen-active');
+                icon.className = "fa-solid fa-expand";
+                isFullScreen = false;
+            }
+        }
+
         function minimizePlayer() {
             const playerContainer = document.getElementById('player-container');
             if (isPlaying && playerContainer) {
+                playerContainer.classList.remove('fullscreen-active');
                 playerContainer.classList.add('mini-player-active');
             }
         }
 
-        // प्लेयर पूरी तरह से कट (बंद) करने का फ़ंक्शन
         function closePlayer() {
             isPlaying = false;
+            isFullScreen = false;
             const playerContainer = document.getElementById('player-container');
-            playerContainer.classList.remove('mini-player-active');
+            playerContainer.classList.remove('mini-player-active', 'fullscreen-active');
             playerContainer.innerHTML = '';
         }
     </script>
