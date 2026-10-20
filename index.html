@@ -218,7 +218,6 @@
             width: 100%;
         }
 
-        /* फुलस्क्रीन मोड में वीडियो को पूरी स्क्रीन पर फैलाने के लिए */
         .fullscreen-active {
             position: fixed !important;
             top: 0 !important;
@@ -240,7 +239,6 @@
             border-radius: 0 !important;
         }
 
-        /* गोल आइकॉन वाला फुलस्क्रीन बटन */
         .custom-fs-btn {
             position: absolute;
             bottom: 15px;
@@ -341,6 +339,13 @@
         .nav-item.active {
             color: #fff;
         }
+
+        .loading-more {
+            text-align: center;
+            padding: 15px;
+            color: #aaa;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
@@ -374,6 +379,9 @@
     </div>
 
     <div class="list-container" id="results"></div>
+    <div class="loading-more" id="loadingMore" style="display:none;">
+        <i class="fa-solid fa-spinner fa-spin"></i> और गाने लोड हो रहे हैं...
+    </div>
 
     <div class="bottom-nav">
         <div class="nav-item active">
@@ -393,22 +401,31 @@
             <span>Library</span>
         </div>
     </div>
-
     <script>
-        const API_KEY = "AIzaSyDI7_dSpetI2zUScSSA7nWTUbiJS147Ms0";
+        // यहाँ आपकी दोनों API Keys जोड़ी गई हैं
+        const API_KEYS = [
+            "AIzaSyDI7_dSpetI2zUScSSA7nWTUbiJS147Ms0", // पहली Key
+            "AIzaSyDimFQoOR2a-OEQkPtGfG0aDtcP75jEIPQ"  // आपकी नई (दूसरी) Key
+        ];
+        
+        let currentKeyIndex = 0; 
         let isPlaying = false;
         let isFullScreen = false;
 
+        let nextPageToken = "";
+        let isLoadingMore = false;
+
         window.onload = () => {
-            searchSongs();
+            searchSongs(false);
             startAutoScroll();
+            setupInfiniteScroll();
         };
 
         function handleSearch() {
             if (isPlaying) {
                 minimizePlayer();
             }
-            searchSongs();
+            searchSongs(false);
         }
 
         function filterCategory(categoryName, element) {
@@ -419,28 +436,70 @@
             if (isPlaying) {
                 minimizePlayer();
             }
-            searchSongs();
+            searchSongs(false);
         }
 
-        async function searchSongs() {
+        async function searchSongs(isLoadMore = false) {
+            if (isLoadMore && isLoadingMore) return;
+            
+            if (isLoadMore) {
+                isLoadingMore = true;
+                document.getElementById('loadingMore').style.display = 'block';
+            } else {
+                nextPageToken = "";
+                document.getElementById('results').innerHTML = '';
+            }
+
             const query = document.getElementById('searchInput').value || 'Trending Rajasthani Songs';
-            const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&q=${encodeURIComponent(query)}&key=${API_KEY}&maxResults=10`;
+            
+            let activeKey = API_KEYS[currentKeyIndex];
+            let url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&q=${encodeURIComponent(query)}&key=${activeKey}&maxResults=15`;
+
+            if (isLoadMore && nextPageToken) {
+                url += `&pageToken=${nextPageToken}`;
+            }
 
             try {
                 const response = await fetch(url);
                 const data = await response.json();
 
-                if (data.items) {
-                    displayBanners(data.items);
+                if (data.error) {
+                    console.warn(`Key Index ${currentKeyIndex} एरर:`, data.error.message);
+                    
+                    // अगर पहली Key का कोटा खत्म हो तो अपने आप दूसरी Key पर स्विच होगा
+                    if (currentKeyIndex < API_KEYS.length - 1) {
+                        currentKeyIndex++;
+                        console.log(`दूसरी Key पर स्विच किया जा रहा है (Index: ${currentKeyIndex})`);
+                        isLoadingMore = false;
+                        searchSongs(isLoadMore);
+                        return;
+                    } else {
+                        alert("सभी API Keys की लिमिट समाप्त हो चुकी है। कृपया दोपहर 12:30 बजे के बाद प्रयास करें।");
+                    }
+                } else if (data.items) {
+                    nextPageToken = data.nextPageToken || "";
+                    if (!isLoadMore) {
+                        displayBanners(data.items);
+                    }
                     displayResults(data.items);
-                } else if (data.error) {
-                    alert("Error: " + data.error.message);
-                } else {
-                    alert("Songs nahi mile.");
                 }
             } catch (error) {
                 console.error("Error fetching data:", error);
+            } finally {
+                isLoadingMore = false;
+                document.getElementById('loadingMore').style.display = 'none';
             }
+        }
+
+        // नीचे स्क्रॉल करने पर और गाने लोड होना (Infinite Scroll)
+        function setupInfiniteScroll() {
+            window.onscroll = () => {
+                if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 400) {
+                    if (nextPageToken && !isLoadingMore) {
+                        searchSongs(true);
+                    }
+                }
+            };
         }
 
         function displayBanners(songs) {
@@ -479,14 +538,15 @@
 
         function displayResults(songs) {
             const resultsContainer = document.getElementById('results');
-            resultsContainer.innerHTML = '';
 
-            songs.forEach((song, index) => {
+            songs.forEach((song) => {
                 const videoId = song.id.videoId;
                 const title = song.snippet.title;
                 const channelTitle = song.snippet.channelTitle;
                 const thumbnailUrl = song.snippet.thumbnails.medium.url;
                 const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
+                
+                const uniqueId = Math.random().toString(36).substring(2, 9);
 
                 const item = document.createElement('div');
                 item.className = 'list-item';
@@ -499,8 +559,8 @@
                             <div class="song-artist">${channelTitle}</div>
                         </div>
                     </div>
-                    <button class="menu-btn" onclick="toggleMenu(event, ${index})"><i class="fa-solid fa-ellipsis-vertical"></i></button>
-                    <div class="dropdown-menu" id="menu-${index}">
+                    <button class="menu-btn" onclick="toggleMenu(event, '${uniqueId}')"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+                    <div class="dropdown-menu" id="menu-${uniqueId}">
                         <a href="${ytUrl}" target="_blank"><i class="fa-solid fa-download"></i> Download / Watch</a>
                         <a href="#" onclick="shareSong('${ytUrl}', '${title}')"><i class="fa-solid fa-share"></i> Share</a>
                     </div>
@@ -510,11 +570,13 @@
             });
         }
 
-        function toggleMenu(event, index) {
+        function toggleMenu(event, uniqueId) {
             event.stopPropagation();
             document.querySelectorAll('.dropdown-menu').forEach(m => m.style.display = 'none');
-            const menu = document.getElementById(`menu-${index}`);
-            menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+            const menu = document.getElementById(`menu-${uniqueId}`);
+            if (menu) {
+                menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+            }
         }
 
         window.onclick = () => {
@@ -525,7 +587,7 @@
             if (navigator.share) {
                 navigator.share({ title: title, url: url }).catch(console.error);
             } else {
-                prompt("Yeh raha song link copy karein:", url);
+                prompt("यह रहा सांग लिंक, कॉपी करें:", url);
             }
         }
 
@@ -547,44 +609,4 @@
                         src="https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1" 
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" 
                         allowfullscreen="true"
-                        webkitallowfullscreen="true"
-                        mozallowfullscreen="true">
-                    </iframe>
-                </div>
-            `;
-            playerContainer.scrollIntoView({ behavior: 'smooth' });
-        }
-
-        function toggleCustomFullScreen() {
-            const playerContainer = document.getElementById('player-container');
-            const icon = document.getElementById('fs-icon');
-
-            if (!isFullScreen) {
-                playerContainer.classList.add('fullscreen-active');
-                icon.className = "fa-solid fa-compress";
-                isFullScreen = true;
-            } else {
-                playerContainer.classList.remove('fullscreen-active');
-                icon.className = "fa-solid fa-expand";
-                isFullScreen = false;
-            }
-        }
-
-        function minimizePlayer() {
-            const playerContainer = document.getElementById('player-container');
-            if (isPlaying && playerContainer) {
-                playerContainer.classList.remove('fullscreen-active');
-                playerContainer.classList.add('mini-player-active');
-            }
-        }
-
-        function closePlayer() {
-            isPlaying = false;
-            isFullScreen = false;
-            const playerContainer = document.getElementById('player-container');
-            playerContainer.classList.remove('mini-player-active', 'fullscreen-active');
-            playerContainer.innerHTML = '';
-        }
-    </script>
-</body>
-</html>
+         
